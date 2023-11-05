@@ -5,7 +5,6 @@ import time
 from model.Complainer import Complainer
 from model.Complaint import Complaint
 
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 
 
@@ -22,27 +21,41 @@ def wait(seconds=None):
     time.sleep(seconds)
 
 
-def get_safe_single_element(fun, parameter):
-    single_item = fun(parameter)
-    if len(single_item) > 0:
-        return single_item[0]
-    return None
-
-def get_safe_single_element_type(fun, type, parameter):
-    single_item = fun(type, parameter)
+def get_safe_single_element_type(fun, by_type, parameter):
+    single_item = fun(by_type, parameter)
     if len(single_item) > 0:
         return single_item[0]
     return None
 
 
-def get_all_url_of_recs(driver):
-    url_rec_n_resp = "https://www.reclameaqui.com.br/area-da-empresa/reclamacoes/nao-respondidas/"
+def get_all_urls(driver):
+    all_recs = []
+    list_pages = "sc-bWOGAC"
+    list_pages_buttons = driver.find_element(By.CLASS_NAME, list_pages)
+    items = list_pages_buttons.find_elements(By.TAG_NAME, "li")
+
+    for index in range(len(items)):
+        if items[index].text:
+            name = "[aria-label='botão da página {}']".format(items[index].text)
+            item_ref = get_safe_single_element_type(driver.find_elements, By.CSS_SELECTOR, name)
+            item_ref.click()
+            wait(5)
+            rec_list_urls = get_all_urls_of_page(driver)
+            all_recs.extend(rec_list_urls)
+            list_pages_buttons = driver.find_element(By.CLASS_NAME, list_pages)
+            items = list_pages_buttons.find_elements(By.TAG_NAME, "li")
+
+    return all_recs
+
+
+def get_all_urls_of_page(driver):
+    url_rec_n_resp = os.environ.get('COLLECTOR_TARGET_PAGE')
     start = time.time()
     urls = []
     list_recs_id = "logged_area_complain_complain_card_list"
-    list_recs_divs = get_safe_single_element_type(driver.find_elements_by_id, list_recs_id)
+    list_recs_divs = get_safe_single_element_type(driver.find_elements, By.ID, list_recs_id)
     if list_recs_divs:
-        recs = list_recs_divs.find_elements_by_tag_name("section")
+        recs = list_recs_divs.find_elements(By.TAG_NAME, "section")
         elements_len = len(recs)
         for index in range(elements_len):
             recs[index].click()
@@ -52,8 +65,8 @@ def get_all_url_of_recs(driver):
             driver.refresh()
             driver.get(url_rec_n_resp)
             wait(5)
-            list_recs_divs = get_safe_single_element_type(driver.find_elements_by_id, list_recs_id)
-            recs = list_recs_divs.find_elements_by_tag_name("section")
+            list_recs_divs = get_safe_single_element_type(driver.find_elements, By.ID, list_recs_id)
+            recs = list_recs_divs.find_elements(By.TAG_NAME, "section")
 
     end = time.time()
     elapsed_time = end - start
@@ -64,14 +77,14 @@ def get_all_url_of_recs(driver):
 def get_rec_infos(driver, url):
     driver.get(url)
     wait(5)
-    rec = get_complainers(driver)
+    rec = get_complaints(driver)
     if rec:
-        print(rec.json())
+        return rec
     else:
-        print("Error to get Rec")
+        return None
 
 
-def get_complainers(driver):
+def get_complaints(driver):
     start = time.time()
     info_container_class = "eDtPlq"
     sec_info_container_class = "fBIAOk"
@@ -81,22 +94,26 @@ def get_complainers(driver):
     name_class = "jrwOZz"
     rec_description_class = "ezeDJG"
     expand_button_name = "[data-testid='expand-btn']"
-    info_container = get_safe_single_element_type(driver.find_elements_by_class_name, info_container_class)
-    sec_info_container = get_safe_single_element_type(driver.find_elements_by_class_name, sec_info_container_class)
-    additional_info_container = get_safe_single_element_type(driver.find_elements_by_class_name, additional_info_class)
-    title_element = get_safe_single_element_type(driver.find_elements_by_class_name, title_class)
-    name_element = get_safe_single_element_type(driver.find_elements_by_class_name, name_class)
+    info_container = get_safe_single_element_type(driver.find_elements, By.CLASS_NAME, info_container_class)
+    sec_info_container = get_safe_single_element_type(driver.find_elements, By.CLASS_NAME, sec_info_container_class)
+    additional_info_container = get_safe_single_element_type(driver.find_elements, By.CLASS_NAME, additional_info_class)
+    title_element = get_safe_single_element_type(driver.find_elements, By.CLASS_NAME, title_class)
+    name_element = get_safe_single_element_type(driver.find_elements, By.CLASS_NAME, name_class)
     if info_container is None:
         return None
-    infos = info_container.find_elements_by_class_name(infos_class)
-    sec_infos = sec_info_container.find_elements_by_class_name(infos_class)
+    infos = info_container.find_elements(By.CLASS_NAME, infos_class)
+    sec_infos = sec_info_container.find_elements(By.CLASS_NAME, infos_class)
 
-    expand_button = get_safe_single_element_type(additional_info_container.find_elements_by_css_selector, expand_button_name)
+    expand_button = get_safe_single_element_type(additional_info_container.find_elements,
+                                                 By.CSS_SELECTOR,
+                                                 expand_button_name)
     if expand_button:
         expand_button.click()
 
-    additional_infos = additional_info_container.find_elements_by_class_name(infos_class)
-    description_container = get_safe_single_element_type(driver.find_elements_by_class_name, rec_description_class)
+    additional_infos = additional_info_container.find_elements(By.CLASS_NAME, infos_class)
+    description_container = get_safe_single_element_type(driver.driver.find_elements,
+                                                         By.CLASS_NAME,
+                                                         rec_description_class)
 
     rec_title = title_element.text
     rec_name = name_element.text
@@ -139,20 +156,3 @@ def get_complainers(driver):
     elapsed_time = end - start
     print('Execution time:', elapsed_time, 'seconds')
     return reclamation
-
-
-def login(driver, user, password):
-    login_input_class = "sc-kpDqfm"
-    password_input_class = "sc-cPiKLX"
-    login_page = os.environ.get('COLLECTOR_LOGIN_PAGE')
-    driver.get(login_page)
-    wait(5)
-    login_input = get_safe_single_element_type(driver.find_elements, By.CLASS_NAME, login_input_class)
-    password_input = get_safe_single_element_type(driver.find_elements, By.CLASS_NAME, password_input_class)
-
-    if login_input is not None and password_input is not None:
-        login_input.send_keys(user + Keys.DOWN + Keys.RETURN)
-        password_input.send_keys(password + Keys.DOWN + Keys.RETURN)
-        return
-
-    print("Error to login")

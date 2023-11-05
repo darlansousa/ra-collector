@@ -2,7 +2,7 @@ import json
 
 
 class Complaint:
-    def __init__(self, cod, identifier, title, date, chanel, reason, description, client):
+    def __init__(self, cod, identifier, title, date, chanel, reason, description, complainer):
         self.cod = cod
         self.identifier = identifier
         self.title = title
@@ -10,7 +10,7 @@ class Complaint:
         self.chanel = chanel
         self.reason = reason
         self.description = description
-        self.client = client
+        self.complainer = complainer
 
     def json(self):
         return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
