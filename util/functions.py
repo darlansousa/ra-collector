@@ -28,6 +28,23 @@ def get_safe_single_element_type(fun, by_type, parameter):
     return None
 
 
+def accept_cookies(driver):
+    wait(3)
+    button = get_safe_single_element_type(driver.find_elements, By.CSS_SELECTOR, "[aria-label='allow cookies']")
+    if button:
+        button.click()
+
+
+def logout(driver):
+    wait(3)
+    button = get_safe_single_element_type(driver.find_elements, By.CLASS_NAME, "eiLCzj")
+    if button:
+        button.click()
+        wait(5)
+        driver.close()
+
+
+
 def get_all_urls(driver):
     all_recs = []
     list_pages = "sc-bWOGAC"
@@ -74,7 +91,7 @@ def get_all_urls_of_page(driver):
     return urls
 
 
-def get_rec_infos(driver, url):
+def get_complaint_infos(driver, url):
     driver.get(url)
     wait(5)
     rec = get_complaints(driver)
@@ -101,6 +118,7 @@ def get_complaints(driver):
     name_element = get_safe_single_element_type(driver.find_elements, By.CLASS_NAME, name_class)
     if info_container is None:
         return None
+    accept_cookies(driver)
     infos = info_container.find_elements(By.CLASS_NAME, infos_class)
     sec_infos = sec_info_container.find_elements(By.CLASS_NAME, infos_class)
 
@@ -111,7 +129,7 @@ def get_complaints(driver):
         expand_button.click()
 
     additional_infos = additional_info_container.find_elements(By.CLASS_NAME, infos_class)
-    description_container = get_safe_single_element_type(driver.driver.find_elements,
+    description_container = get_safe_single_element_type(driver.find_elements,
                                                          By.CLASS_NAME,
                                                          rec_description_class)
 

@@ -7,14 +7,59 @@ from tkinter import *
 from tkinter import ttk
 from tkinter import messagebox
 
-from db.functions import get_connection, save_urls, save_url_process, get_pending_urls, register_complaint
-from util.functions import wait, get_all_urls, get_complaint_infos
+from db.functions import get_connection, save_urls, get_pending_urls, register_complaint, \
+    done_complaint_process, get_processed
+from util.functions import wait, get_all_urls, get_complaint_infos, accept_cookies, logout
 
 
-def text():
-    print("OK")
+def get_driver():
+    options = webdriver.ChromeOptions()
+    options.add_argument("start-maximized")
+    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+
+def step_1():
     conn = get_connection()
-    save_url_process(conn, "xxxxxx/xxx")
+    driver = get_driver()
+    driver.get(os.environ.get('COLLECTOR_LOGIN_PAGE'))
+    option = messagebox.askquestion("Waiting login.... ",
+                                    "When you complete the login, click YES")
+    if option == 'yes':
+        driver.get(os.environ.get('COLLECTOR_TARGET_PAGE'))
+        wait(5)
+        accept_cookies(driver)
+        try:
+            urls = get_all_urls(driver)
+            if len(urls) > 0:
+                save_urls(conn, urls)
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+    option = messagebox.askquestion("Second Step",
+                                    "Do you want to process complaints?")
+    if option == 'yes':
+        process_urls(driver, conn)
+
+    option = messagebox.askquestion("Waiting close.... ",
+                                    "When you want to close, click YES")
+    if option == 'yes':
+        logout(driver)
+
+
+def step_2():
+    conn = get_connection()
+    driver = get_driver()
+    driver.get(os.environ.get('COLLECTOR_LOGIN_PAGE'))
+
+    option = messagebox.askquestion("Waiting login.... ",
+                                    "When you complete the login, click YES")
+    if option == 'yes':
+        process_urls(driver, conn)
+
+    option = messagebox.askquestion("Waiting close.... ",
+                                    "When you want to close, click YES")
+    if option == 'yes':
+        logout(driver)
 
 
 def process_urls(driver, conn):
@@ -24,44 +69,17 @@ def process_urls(driver, conn):
         complaint = get_complaint_infos(driver, url)
         if complaint:
             if register_complaint(conn, complaint):
+                done_complaint_process(conn, complaint.cod)
                 result.append(complaint)
         else:
             wait(50)
             driver.refresh()
             complaint = get_complaint_infos(driver, url)
             if register_complaint(conn, complaint):
+                done_complaint_process(conn, complaint.cod)
                 result.append(complaint)
 
     messagebox.showinfo("Result", f"{len(result)} complaints processed")
-
-
-def open_driver():
-    conn = get_connection()
-    option = webdriver.ChromeOptions()
-    option.add_argument("start-maximized")
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
-    driver.get(os.environ.get('COLLECTOR_LOGIN_PAGE'))
-    option = messagebox.askquestion("Waiting login.... ",
-                                    "When you complete the login, click YES")
-    if option == 'yes':
-        driver.get(os.environ.get('COLLECTOR_TARGET_PAGE'))
-        wait(5)
-        try:
-            urls = get_all_urls(driver)
-            if len(urls) > 0:
-                save_urls(conn, urls)
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-
-    option = messagebox.askquestion("Second Step ",
-                                    "Do you want to process complaints?")
-    if option == 'yes':
-        process_urls(driver, conn)
-
-    option = messagebox.askquestion("Waiting close.... ",
-                                    "When you want to close, click YES")
-    if option == 'yes':
-        driver.close()
 
 
 def show_info():
@@ -77,6 +95,9 @@ def show_info():
 
 
 if __name__ == '__main__':
+    co = get_connection()
+    pending = get_pending_urls(co)
+    processed = get_processed(co)
     window = Tk()
     window.title("RA-Collector")
     window.geometry('500x300')
@@ -86,8 +107,13 @@ if __name__ == '__main__':
     site = os.environ.get('COLLECTOR_SITE')
     login_page = os.environ.get('COLLECTOR_LOGIN_PAGE')
     target_page = os.environ.get('COLLECTOR_TARGET_PAGE')
-    ttk.Button(frame, text="Get complaints urls", command=open_driver).grid(column=0, row=8)
-    ttk.Button(frame, text="Process pending complaints", command=text).grid(column=2, row=8)
+    ttk.Button(frame, text="Get complaints urls", command=step_1).grid(column=0, row=8)
+    if len(pending) > 0:
+        ttk.Button(frame, text=f"Process {len(pending)} pending complaints", command=step_2).grid(column=2, row=8)
+    else:
+        ttk.Label(text=f"All complaints processed").grid(column=0, row=10)
     ttk.Button(frame, text="Infos", command=show_info).grid(column=3, row=8)
-    ttk.Button(frame, text="Quit", command=window.destroy).grid(column=4, row=8)
+    ttk.Button(frame, text="Quit", command=window.destroy).grid(column=5, row=8)
+    ttk.Label(text=f"Processed complaints: {len(processed)}").grid(column=0, row=9)
+    ttk.Label(text=f"Processed complaints: {len(processed)}").grid(column=0, row=9)
     window.mainloop()

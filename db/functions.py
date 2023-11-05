@@ -118,7 +118,19 @@ def get_pending_urls(conn):
     try:
         result = conn.execute(query)
         for row in result:
-            urls.append(row['link'])
+            urls.append(row[0])
+    except Exception as e:
+        print(f'Error: {e}')
+    return urls
+
+
+def get_processed(conn):
+    urls = []
+    query = text(f"SELECT link FROM complaints_process WHERE status = 'ok'")
+    try:
+        result = conn.execute(query)
+        for row in result:
+            urls.append(row[0])
     except Exception as e:
         print(f'Error: {e}')
     return urls
