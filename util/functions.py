@@ -1,9 +1,13 @@
 import os
+import math
+import requests
 import random
 import time
 
+from db.functions import save_urls
 from model.Complainer import Complainer
 from model.Complaint import Complaint
+from tkinter import Tk
 
 from selenium.webdriver.common.by import By
 
@@ -13,6 +17,13 @@ def get_safety_string_from_index(elements, index, default_value):
         return elements[index].text
     except IndexError:
         return default_value
+
+
+def get_safety_from_index(elements, index):
+    try:
+        return elements[index]
+    except IndexError:
+        return None
 
 
 def wait(seconds=None):
@@ -32,63 +43,70 @@ def accept_cookies(driver):
     wait(3)
     button = get_safe_single_element_type(driver.find_elements, By.CSS_SELECTOR, "[aria-label='allow cookies']")
     if button:
-        button.click()
+        driver.execute_script("arguments[0].click();", button)
 
 
 def logout(driver):
     wait(3)
     button = get_safe_single_element_type(driver.find_elements, By.CLASS_NAME, "eiLCzj")
     if button:
-        button.click()
+        driver.execute_script("arguments[0].click();", button)
         wait(5)
-        driver.close()
+
+    driver.close()
 
 
-
-def get_all_urls(driver):
-    all_recs = []
-    list_pages = "sc-bWOGAC"
-    list_pages_buttons = driver.find_element(By.CLASS_NAME, list_pages)
-    items = list_pages_buttons.find_elements(By.TAG_NAME, "li")
-
-    for index in range(len(items)):
-        if items[index].text:
-            name = "[aria-label='botão da página {}']".format(items[index].text)
-            item_ref = get_safe_single_element_type(driver.find_elements, By.CSS_SELECTOR, name)
-            item_ref.click()
+def get_all_urls(conn, driver, total_items):
+    wait(5)
+    items_per_page = 10
+    num_pages = math.ceil(int(total_items) / items_per_page)
+    for i in range(1, num_pages + 1):
+        name = "[aria-label='botão da página {}']".format(i)
+        item_ref = get_safe_single_element_type(driver.find_elements, By.CSS_SELECTOR, name)
+        if item_ref:
+            driver.execute_script("arguments[0].click();", item_ref)
             wait(5)
-            rec_list_urls = get_all_urls_of_page(driver)
-            all_recs.extend(rec_list_urls)
-            list_pages_buttons = driver.find_element(By.CLASS_NAME, list_pages)
-            items = list_pages_buttons.find_elements(By.TAG_NAME, "li")
-
-    return all_recs
+            get_all_urls_of_page(conn, driver)
 
 
-def get_all_urls_of_page(driver):
-    url_rec_n_resp = os.environ.get('COLLECTOR_TARGET_PAGE')
+def get_all_urls_of_page(conn, driver):
     start = time.time()
-    urls = []
     list_recs_id = "logged_area_complain_complain_card_list"
     list_recs_divs = get_safe_single_element_type(driver.find_elements, By.ID, list_recs_id)
     if list_recs_divs:
         recs = list_recs_divs.find_elements(By.TAG_NAME, "section")
         elements_len = len(recs)
         for index in range(elements_len):
-            recs[index].click()
-            wait(3)
-            url = driver.current_url
-            urls.append(url)
-            driver.refresh()
-            driver.get(url_rec_n_resp)
-            wait(5)
+            save_urls(conn, get_cods(recs[index], driver))
             list_recs_divs = get_safe_single_element_type(driver.find_elements, By.ID, list_recs_id)
-            recs = list_recs_divs.find_elements(By.TAG_NAME, "section")
+            if list_recs_divs:
+                recs = list_recs_divs.find_elements(By.TAG_NAME, "section")
+            else:
+                wait(5)
+                list_recs_divs = get_safe_single_element_type(driver.find_elements, By.ID, list_recs_id)
+                recs = list_recs_divs.find_elements(By.TAG_NAME, "section")
 
     end = time.time()
     elapsed_time = end - start
     print('Execution time:', elapsed_time, 'seconds')
-    return urls
+
+
+def get_cods(rec_element, driver):
+    win = Tk()
+    codes = []
+    options = get_safe_single_element_type(rec_element.find_elements, By.CLASS_NAME, 'iTWEtF')
+    if options:
+        buttons = options.find_elements(By.TAG_NAME, 'button')
+        copy_button = get_safety_from_index(buttons, 2)
+        if copy_button:
+            driver.execute_script("arguments[0].click();", copy_button)
+            url = win.clipboard_get()
+            if url:
+                cod = url[-16:]
+                codes.append(cod)
+
+    win.destroy()
+    return codes
 
 
 def get_complaint_infos(driver, url):
@@ -97,8 +115,8 @@ def get_complaint_infos(driver, url):
     rec = get_complaints(driver)
     if rec:
         return rec
-    else:
-        return None
+
+    return None
 
 
 def get_complaints(driver):
@@ -109,7 +127,7 @@ def get_complaints(driver):
     infos_class = "ljuKit"
     title_class = "dTQXop"
     name_class = "jrwOZz"
-    rec_description_class = "ezeDJG"
+    rec_description_class = "jTxpkE"
     expand_button_name = "[data-testid='expand-btn']"
     info_container = get_safe_single_element_type(driver.find_elements, By.CLASS_NAME, info_container_class)
     sec_info_container = get_safe_single_element_type(driver.find_elements, By.CLASS_NAME, sec_info_container_class)
@@ -126,7 +144,7 @@ def get_complaints(driver):
                                                  By.CSS_SELECTOR,
                                                  expand_button_name)
     if expand_button:
-        expand_button.click()
+        driver.execute_script("arguments[0].click();", expand_button)
 
     additional_infos = additional_info_container.find_elements(By.CLASS_NAME, infos_class)
     description_container = get_safe_single_element_type(driver.find_elements,
@@ -149,6 +167,9 @@ def get_complaints(driver):
     rec_uc = get_safety_string_from_index(additional_infos, 1, "")
     rec_chanel = get_safety_string_from_index(additional_infos, 2, "")
     rec_reason = get_safety_string_from_index(additional_infos, 3, "")
+    if description_container is None:
+        return None
+
     rec_description = description_container.text
 
     client = Complainer(rec_cpf,
@@ -174,3 +195,15 @@ def get_complaints(driver):
     elapsed_time = end - start
     print('Execution time:', elapsed_time, 'seconds')
     return reclamation
+
+
+def get_website_total_complaints():
+    url = os.environ.get('COLLECTOR_SITE_INFO_URL')
+    payload = {}
+    headers = {
+        'Cookie': os.environ.get('COLLECTOR_SITE_INFO_COOKIE'),
+        'User-Agent': os.environ.get('COLLECTOR_SITE_INFO_AGENT')
+    }
+    response = requests.request("GET", url, headers=headers, data=payload)
+    response_json = response.json()
+    return response_json['complainResult']['complains']['count']

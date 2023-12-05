@@ -1,4 +1,9 @@
 import json
+from dateutil.parser import parse
+
+
+def get_date_from(string):
+    return parse(string, fuzzy=True).strftime('%Y-%m-%d %H:%M:%S')
 
 
 class Complaint:
@@ -11,6 +16,7 @@ class Complaint:
         self.reason = reason
         self.description = description
         self.complainer = complainer
+        self.open_date = get_date_from(date)
 
     def json(self):
         return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)

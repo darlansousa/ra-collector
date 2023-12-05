@@ -1,3 +1,4 @@
+import logging
 import os
 from sqlalchemy import create_engine
 from sqlalchemy import text
@@ -34,18 +35,24 @@ def exists_by(conn, table, field, value):
 
 def save_url_process(conn, url):
     cod = url.split('/')[-1]
+    print(cod)
+    if cod == '' or len(cod) != 16:
+        return
+
     if not exists_by(conn, 'complaints_process', 'ra_cod', cod):
         query = text(f"INSERT INTO complaints_process (ra_cod, link, status) VALUES('{cod}', '{url}', 'pending')")
         try:
             conn.execute(query)
             conn.commit()
+            print('Saved url: ', url)
         except Exception as e:
             print(f'Error: {e}')
 
 
 def save_urls(conn, urls):
     for url in urls:
-        save_url_process(conn, url)
+        prefix = os.environ.get('COLLECTOR_COMP_PREFIX')
+        save_url_process(conn, prefix + url)
 
 
 def get_last_id(conn, table):
@@ -70,6 +77,7 @@ def create_complainer(conn, complainer):
     try:
         conn.execute(query)
         conn.commit()
+        print('Saved complainer: ', complainer.cpf)
         return True
     except Exception as e:
         print(f'Error: {e}')
@@ -79,7 +87,16 @@ def create_complainer(conn, complainer):
 def create_complaint(conn, complaint, complainer_id):
     query = text(f"""
         INSERT INTO complaints
-        (ra_cod, ra_id, title, date_description, chanel, reason, description, complainer_id)
+        (ra_cod, 
+        ra_id, 
+        title, 
+        date_description, 
+        chanel, 
+        reason, 
+        description, 
+        complainer_id, 
+        complaints_status, 
+        open_date)
         VALUES('{complaint.cod}',
          '{complaint.identifier}',
          '{complaint.title}',
@@ -87,10 +104,12 @@ def create_complaint(conn, complaint, complainer_id):
           '{complaint.chanel}',
           '{complaint.reason}',
           '{complaint.description}',
-           {complainer_id})""")
+           {complainer_id}, 
+           'pending', '{complaint.open_date}')""")
     try:
         conn.execute(query)
         conn.commit()
+        print('Saved complaint: ', complaint.cod)
         return True
     except Exception as e:
         print(f'Error: {e}')
@@ -108,6 +127,7 @@ def done_complaint_process(conn, cod):
     try:
         conn.execute(query)
         conn.commit()
+        print('Done: ', cod)
     except Exception as e:
         print(f'Error: {e}')
 
@@ -126,7 +146,7 @@ def get_pending_urls(conn):
 
 def get_processed(conn):
     urls = []
-    query = text(f"SELECT link FROM complaints_process WHERE status = 'ok'")
+    query = text(f"SELECT link FROM complaints_process WHERE status = 'done'")
     try:
         result = conn.execute(query)
         for row in result:
